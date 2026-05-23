@@ -74,3 +74,4 @@ if check_password():
 # Footer
 st.markdown("---")
 st.caption("Created with ❤️ by Abdullah Developer | 2026")
+https://abdullah-deveop.streamlit.app/
