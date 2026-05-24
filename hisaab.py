@@ -2,9 +2,9 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-import plotly.express as px # Graphs ke liye
+import plotly.express as px
 
-# --- 1. GOOGLE SHEETS CONNECTION ---
+# --- 1. DATABASE CONNECTION ---
 def connect_to_sheet(sheet_name):
     try:
         creds_info = st.secrets["gcp_service_account"]
@@ -14,6 +14,7 @@ def connect_to_sheet(sheet_name):
         sheet = client.open("UserDatabase").worksheet(sheet_name)
         return sheet
     except Exception as e:
+        st.error(f"Error connecting to {sheet_name}: {e}")
         return None
 
 # --- 2. CONFIG ---
@@ -23,70 +24,84 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["username"] = ""
 
-# --- 3. LOGIN / SIGN UP ---
+# --- 3. LOGIN & SIGN UP LOGIC ---
 if not st.session_state["logged_in"]:
-    # (Pehla wala login/signup code yahan rahega - assume it's there)
-    # [Yahan wahi login wala hissa paste karein jo pehle chal raha tha]
-    pass # (Aapne pura login code yahan barqarar rakhna hai)
+    st.title("🚀 Skill Tracker Pro")
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+
+    user_sheet = connect_to_sheet("Sheet1") # Sheet1 for Users
+
+    with tab1:
+        st.subheader("Login")
+        l_user = st.text_input("Username", key="l_user")
+        l_pass = st.text_input("Password", type="password", key="l_pass")
+        if st.button("Login"):
+            all_users = user_sheet.get_all_records()
+            found = False
+            for row in all_users:
+                if str(row['username']) == l_user and str(row['password']) == l_pass:
+                    found = True
+                    break
+            if found:
+                st.session_state["logged_in"] = True
+                st.session_state["username"] = l_user
+                st.rerun()
+            else:
+                st.error("Ghalat Username ya Password!")
+
+    with tab2:
+        st.subheader("Create Account")
+        s_user = st.text_input("Username", key="s_user")
+        s_email = st.text_input("Email", key="s_email")
+        s_pass = st.text_input("Password", type="password", key="s_pass")
+        if st.button("Sign Up"):
+            if s_user and s_pass:
+                user_sheet.append_row([s_user, s_pass, s_email])
+                st.success("Account ban gaya! Ab Login tab par jayen.")
+            else:
+                st.error("Saari fields bharen.")
 
 # --- 4. MAIN DASHBOARD ---
 else:
     user_now = st.session_state["username"]
-    st.title(f"📊 {user_now}'s Skill Dashboard")
+    st.title(f"📊 {user_now}'s Dashboard")
     
-    # Do Sheets connect karni hain
-    user_sheet = connect_to_sheet("Sheet1")
-    skill_sheet = connect_to_sheet("SkillsData")
+    skill_sheet = connect_to_sheet("SkillsData") # SkillsData sheet for skills
 
-    # --- Sidebar: Add New Skill ---
     with st.sidebar:
-        st.header("➕ Add New Skill")
-        skill_input = st.text_input("Skill Name (e.g. Python)")
-        prog_input = st.slider("Progress %", 0, 100, 50)
-        if st.button("Save to Database"):
-            skill_sheet.append_row([user_now, skill_input, prog_input])
-            st.success("Skill Saved!")
+        st.header("➕ Add Skill")
+        s_name = st.text_input("Skill Name")
+        s_prog = st.slider("Progress %", 0, 100, 50)
+        if st.button("Save Skill"):
+            skill_sheet.append_row([user_now, s_name, s_prog])
+            st.success("Saved!")
             st.rerun()
         
         if st.button("Logout"):
             st.session_state["logged_in"] = False
             st.rerun()
 
-    # --- DATA FETCHING ---
-    all_skills = skill_sheet.get_all_records()
-    df = pd.DataFrame(all_skills)
-    
-    # Sirf login user ka data filter karna
-    if not df.empty:
+    # Data Fetching for Graphs
+    data = skill_sheet.get_all_records()
+    if data:
+        df = pd.DataFrame(data)
         user_df = df[df['username'] == user_now]
         
         if not user_df.empty:
-            # --- TOP METRICS ---
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Skills", len(user_df))
-            col2.metric("Avg Progress", f"{int(user_df['progress'].mean())}%")
-            col3.metric("Top Skill", user_df.sort_values(by='progress', ascending=False).iloc[0]['skill_name'])
+            # Metrics
+            c1, c2 = st.columns(2)
+            c1.metric("Total Skills", len(user_df))
+            c2.metric("Avg Progress", f"{int(user_df['progress'].mean())}%")
 
-            st.write("---")
-
-            # --- GRAPHS SECTION ---
+            # Graphs
             g1, g2 = st.columns(2)
-            
             with g1:
-                st.subheader("Skill Progress (Bar Chart)")
-                fig_bar = px.bar(user_df, x='skill_name', y='progress', color='progress',
-                                 color_continuous_scale='Viridis', text_auto=True)
-                st.plotly_chart(fig_bar, use_container_width=True)
-
+                fig1 = px.bar(user_df, x='skill_name', y='progress', color='progress', title="Skill Bars")
+                st.plotly_chart(fig1, use_container_width=True)
             with g2:
-                st.subheader("Skill Distribution (Pie Chart)")
-                fig_pie = px.pie(user_df, names='skill_name', values='progress', hole=0.4)
-                st.plotly_chart(fig_pie, use_container_width=True)
-                
-            # --- DATA TABLE ---
-            st.subheader("Detailed Data")
-            st.dataframe(user_df[['skill_name', 'progress']], use_container_width=True)
+                fig2 = px.pie(user_df, names='skill_name', values='progress', title="Skill Mix", hole=0.3)
+                st.plotly_chart(fig2, use_container_width=True)
         else:
-            st.info("Abhi tak koi skill add nahi kiya. Sidebar se add karein!")
+            st.info("Abhi tak koi skill add nahi kiya!")
     else:
-        st.info("Database khali hai. Pehla skill add karein!")
+        st.info("Database khali hai!")
