@@ -78,30 +78,34 @@ else:
             st.rerun()
         
         if st.button("Logout"):
-            st.session_state["logged_in"] = False
-            st.rerun()
+          # --- 4. MAIN DASHBOARD ---
+    # ... (baaki code wahi rahega)
 
-    # Data Fetching for Graphs
-    data = skill_sheet.get_all_records()
-    if data:
-        df = pd.DataFrame(data)
-        user_df = df[df['username'] == user_now]
-        
-        if not user_df.empty:
-            # Metrics
-            c1, c2 = st.columns(2)
-            c1.metric("Total Skills", len(user_df))
-            c2.metric("Avg Progress", f"{int(user_df['progress'].mean())}%")
+    skill_sheet = connect_to_sheet("SkillsData")
 
-            # Graphs
-            g1, g2 = st.columns(2)
-            with g1:
-                fig1 = px.bar(user_df, x='skill_name', y='progress', color='progress', title="Skill Bars")
-                st.plotly_chart(fig1, use_container_width=True)
-            with g2:
-                fig2 = px.pie(user_df, names='skill_name', values='progress', title="Skill Mix", hole=0.3)
-                st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.info("Abhi tak koi skill add nahi kiya!")
+    if skill_sheet is not None:
+        with st.sidebar:
+            st.header("➕ Add Skill")
+            s_name = st.text_input("Skill Name")
+            s_prog = st.slider("Progress %", 0, 100, 50)
+            if st.button("Save Skill"):
+                skill_sheet.append_row([user_now, s_name, s_prog])
+                st.success("Saved!")
+                st.rerun()
+            
+            if st.button("Logout"):
+                st.session_state["logged_in"] = False
+                st.rerun()
+
+        # Data Fetching
+        try:
+            data = skill_sheet.get_all_records()
+            if data:
+                df = pd.DataFrame(data)
+                # Baaki graphs wala code yahan aayega...
+            else:
+                st.info("Abhi tak koi data nahi hai. Sidebar se add karein!")
+        except Exception as e:
+            st.error(f"Data parhne mein masla: {e}")
     else:
-        st.info("Database khali hai!")
+        st.error("Error: 'SkillsData' wali sheet nahi mili. Please Google Sheet mein tab banayein!")
