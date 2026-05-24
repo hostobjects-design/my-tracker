@@ -77,7 +77,23 @@ else:
         st.session_state["logged_in"] = False
         st.rerun()
 
-    st.title("📊 Your Skill Dashboard")
+    st.title("📊 Your Skill Dashboard") # Dashboard ke andar naya skill add karne ka form
+    with st.expander("➕ Add New Skill"):
+        new_skill = st.text_input("Skill Name")
+        progress = st.slider("Progress", 0, 100, 25)
+        if st.button("Save Skill"):
+            # Yahan hum aik aur sheet bana sakte hain skills save karne ke liye
+            st.success(f"{new_skill} saved at {progress}%!")
+
+    # Skill Display (Dummy data for now)
+    st.subheader("Your Progress")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**Python**")
+        st.progress(80)
+    with col2:
+        st.write("**Marketing**")
+        st.progress(45)
     st.info(f"Logged in as: {st.session_state['username']}")
     
     # Placeholder for Tracker Content
