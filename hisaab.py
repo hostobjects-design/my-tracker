@@ -1,65 +1,86 @@
 import streamlit as st
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-from datetime import datetime
 
-# 1. Page Config
-st.set_page_config(page_title="Abdullah's Skill Tracker", page_icon="🚀", layout="centered")
+# --- 1. GOOGLE SHEETS CONNECTION ---
+def connect_to_sheet():
+    try:
+        # Streamlit Secrets se data uthana
+        creds_info = st.secrets["gcp_service_account"]
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+        client = gspread.authorize(creds)
+        # Sheet ka naam wahi rakhen jo aapne rakha hai
+        sheet = client.open("UserDatabase").sheet1
+        return sheet
+    except Exception as e:
+        st.error(f"Database Connection Error: {e}")
+        return None
 
-# 2. Simple English Login System
-def check_password():
-    if "authenticated" not in st.session_state:
-        st.session_state["authenticated"] = False
+# --- 2. APP CONFIG ---
+st.set_page_config(page_title="Skill Tracker Pro", page_icon="📈")
+sheet = connect_to_sheet()
 
-    if not st.session_state["authenticated"]:
-        st.title("🔐 Sign In")
-        st.info("Please enter your credentials to access the dashboard.")
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+    st.session_state["username"] = ""
+
+# --- 3. LOGIN / SIGN UP UI ---
+if not st.session_state["logged_in"]:
+    st.title("🚀 Skill Tracker Pro")
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+
+    with tab1:
+        st.subheader("Login to your account")
+        l_user = st.text_input("Username", key="l_user")
+        l_pass = st.text_input("Password", type="password", key="l_pass")
         
-        # English Inputs
-        username = st.text_input("Username", placeholder="Enter your name")
-        password = st.text_input("Password", type="password", placeholder="Enter password")
-        
-        if st.button("Sign In"):
-            if username == "abdullah" and password == "baba123":
-                st.session_state["authenticated"] = True
-                st.success("Login Successful!")
+        if st.button("Login"):
+            all_data = sheet.get_all_records()
+            user_found = False
+            for row in all_data:
+                if str(row['username']) == l_user and str(row['password']) == l_pass:
+                    user_found = True
+                    break
+            
+            if user_found:
+                st.session_state["logged_in"] = True
+                st.session_state["username"] = l_user
+                st.success(f"Welcome back, {l_user}!")
                 st.rerun()
             else:
-                st.error("Invalid Username or Password!")
-        return False
-    return True
+                st.error("Invalid Username or Password")
 
-# 3. Main App (Only shows if logged in)
-if check_password():
-    # Sidebar for logout and inputs
-    st.sidebar.title("Navigation")
+    with tab2:
+        st.subheader("Create a new account")
+        s_user = st.text_input("Choose Username", key="s_user")
+        s_email = st.text_input("Email Address", key="s_email")
+        s_pass = st.text_input("Choose Password", type="password", key="s_pass")
+
+        if st.button("Create Account"):
+            if s_user and s_pass:
+                all_users = sheet.col_values(1)
+                if s_user in all_users:
+                    st.warning("Username already exists. Try another.")
+                else:
+                    sheet.append_row([s_user, s_pass, s_email])
+                    st.balloons()
+                    st.success("Account created successfully! Now go to Login tab.")
+            else:
+                st.error("Please fill all fields.")
+
+# --- 4. MAIN DASHBOARD (Only after Login) ---
+else:
+    st.sidebar.title(f"Welcome, {st.session_state['username']}!")
     if st.sidebar.button("Logout"):
-        st.session_state["authenticated"] = False
+        st.session_state["logged_in"] = False
         st.rerun()
 
-    st.title("📊 My Skill Progress Tracker")
-    st.write("Welcome back, Abdullah! Track your daily learning below.")
-    st.markdown("---")
-
-    # Entry Section
-    with st.sidebar:
-        st.header("Add New Task")
-        task_name = st.text_input("Task Name", placeholder="e.g., Python Basics")
-        duration = st.number_input("Hours Spent", min_value=0.1, max_value=24.0, step=0.5)
-        category = st.selectbox("Category", ["Coding", "Learning", "Project", "Research"])
-        
-        if st.button("Save Entry"):
-            st.balloons()
-            st.success("Data saved successfully!")
-
-    # Display Graph
-    st.subheader("Your Productivity Chart")
-    # This is placeholder data for the demo
-    chart_data = pd.DataFrame({
-        'Category': ['Coding', 'Learning', 'Project', 'Research'],
-        'Hours': [8, 5, 3, 2]
-    })
-    st.bar_chart(chart_data.set_index('Category'))
-
-st.markdown("---")
-st.caption("Developed by Abdullah Developer | 2026")
-st.caption("Created with ❤️ by Abdullah Developer | 2026")
+    st.title("📊 Your Skill Dashboard")
+    st.info(f"Logged in as: {st.session_state['username']}")
+    
+    # Placeholder for Tracker Content
+    st.write("---")
+    st.write("Ab aap yahan apna tracker ka saara kaam kar sakte hain.")
+    st.success("App is successfully connected to Google Sheets! ✅")
